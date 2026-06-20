@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId, Admin } = require("mongodb");
 // const jose = require("jose-cjs");
 
 require("dotenv").config();
@@ -46,6 +46,14 @@ async function run() {
 
     const account = await client.db('account')
     const ticket = await client.db('Tickets')
+    const authAccount = await client.db('TL_AUTH')
+
+    //get admin user for manage 
+
+    app.get('/api/admin/user',async(req,res) => {
+      const data = await account.collection('user').find().toArray();
+      res.send(data);
+    })
 
     // get all ticket 
 
@@ -119,6 +127,57 @@ async function run() {
         }
        )
        console.log(msg)
+    })
+
+    // patch user role by Admin 
+    app.patch('/api/admin/users',async (req,res) => {
+      const id = req.body.id;
+      const role = req.body?.role;
+      const isFraud = req.body?.isFraud;
+
+      if(isFraud){
+        const makeUserAction = await account.collection('user').updateOne(
+        {_id:new ObjectId(id)},
+        {
+          $set:{
+            isBlock:true
+          }
+        }
+      )
+
+      const makeUserAction2 = await authAccount.collection('user').updateOne(
+        {_id:new ObjectId(id)},
+        // { isBlock: { $exists: false } },
+        {
+          $set:{
+            isFraud:isFraud
+          }
+        }
+      )
+      res.send(makeUserAction)
+
+      }else if(role){
+        const makeUserAction = await account.collection('user').updateOne(
+        {_id:new ObjectId(id)},
+        {
+          $set:{
+            role:role,
+          }
+        }
+      )
+
+      const makeUserAction2 = await authAccount.collection('user').updateOne(
+        {_id:new ObjectId(id)},
+        {
+          $set:{
+            role:role,
+          }
+        }
+      )
+      res.send(makeUserAction)
+      }
+
+      
     })
 
   }
