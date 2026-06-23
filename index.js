@@ -81,7 +81,7 @@ async function run() {
     ] = await Promise.all([
       ticket.collection('tickets').countDocuments(),
       ticket.collection('tickets').countDocuments({ verificationStatus: 'pending' }),
-      ticket.collection('tickets').countDocuments({ verificationStatus: 'active' }),
+      ticket.collection('tickets').countDocuments({ verificationStatus: 'approved' }),
       ticket.collection('tickets').countDocuments({ verificationStatus: 'rejected' }),
       account.collection('user').countDocuments( {role: { $ne: 'admin' }}),
       account.collection('user').countDocuments({ role: 'user',   isBlock: false }),
@@ -234,9 +234,11 @@ app.patch('/api/admin/getuser', async (req, res) => {
 
     // patch user role by Admin 
     app.patch('/api/admin/users',async (req,res) => {
-      const id = req.body.id;
+      const id = req.body?.id;
       const role = req.body?.role;
       const isFraud = req.body?.isFraud;
+      const email = req.body?.email
+      console.log(req.body)
 
       if(isFraud){
         const makeUserAction = await account.collection('user').updateOne(
@@ -257,11 +259,11 @@ app.patch('/api/admin/getuser', async (req, res) => {
       })
 
       const makeUserAction2 = await authAccount.collection('user').updateOne(
-        {_id:new ObjectId(id)},
+        {email:email},
         // { isBlock: { $exists: false } },
         {
           $set:{
-            isFraud:isFraud
+            isFraud:true,
           }
         }
       )
@@ -278,13 +280,14 @@ app.patch('/api/admin/getuser', async (req, res) => {
       )
 
       const makeUserAction2 = await authAccount.collection('user').updateOne(
-        {_id:new ObjectId(id)},
+        {email:email},
         {
           $set:{
             role:role,
           }
         }
       )
+      console.log(makeUserAction2,id,role,email)
       res.send(makeUserAction)
       }
 
