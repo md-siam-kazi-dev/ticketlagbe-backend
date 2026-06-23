@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion, ObjectId, Admin } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
  const jose = require("jose-cjs");
 
 require("dotenv").config();
@@ -12,7 +12,7 @@ app.use(express.json());
 
 const uri = process.env.MONOGODB_URI;
  const JWKS = jose.createRemoteJWKSet(
-   new URL("https://localhost:5000/api/auth/jwks"),
+   new URL("http://localhost:3000/api/auth/jwks"),
  );
 const client = new MongoClient(uri, {
   serverApi: {
@@ -54,7 +54,7 @@ async function run() {
 
     //get admin user for manage 
 
-    app.get('/api/admin/user',async(req,res) => {
+    app.get('/api/admin/user',verifyToken,async(req,res) => {
       const data = await account.collection('user').find().toArray();
       res.send(data);
     })
@@ -117,7 +117,7 @@ async function run() {
     })
 
     // GET /api/getuser/:email
-app.get('/api/getuser/:email', async (req, res) => {
+app.get('/api/getuser/:email',verifyToken, async (req, res) => {
   try {
     const { email } = req.params;
     const user = await account.collection('user').findOne({ email });
@@ -187,13 +187,38 @@ app.patch('/api/admin/getuser', async (req, res) => {
 
     })
 
+
+    // PATCH /api/ticket/:id  →  Update a ticket
+    app.patch('/api/ticket', async (req, res) => {
+      
+      const updatedData = req.body
+
+      const result = await ticket.collection('tickets').updateOne(
+        { _id: new ObjectId(req.body.id) },
+        { $set: updatedData }
+      )
+
+      res.send(result)
+    })
+
+    // DELETE /api/ticket/:id  →  Delete a ticket
+    app.delete('/api/ticket/:id', async (req, res) => {
+      const id = req.params.id
+
+      const result = await ticket.collection('tickets').deleteOne(
+        { _id: new ObjectId(id) }
+      )
+
+      res.send(result)
+    })
+
     //patch updatad ticket data from vendor
 
 
     //patch admin reject or approve 
 
 
-    app.patch('/api/admin/tickets',async(req,res) => {
+    app.patch('/api/admin/tickets',verifyToken,async(req,res) => {
        const status = req.body.verificationStatus
        const id = req.body.id;
        const msg = await ticket.collection('tickets').updateOne(
