@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId, Admin } = require("mongodb");
-// const jose = require("jose-cjs");
+ const jose = require("jose-cjs");
 
 require("dotenv").config();
 
@@ -11,9 +11,9 @@ app.use(cors());
 app.use(express.json());
 
 const uri = process.env.MONOGODB_URI;
-// const JWKS = jose.createRemoteJWKSet(
-//   new URL("https://assignment-9-bvgd.vercel.app/api/auth/jwks"),
-// );
+ const JWKS = jose.createRemoteJWKSet(
+   new URL("https://localhost:5000/api/auth/jwks"),
+ );
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -22,24 +22,28 @@ const client = new MongoClient(uri, {
   },
 });
 
-// const verifyToken = async (req, res, next) => {
-//   const authToken = req.headers.authorization.split(" ")[1];
-//   if (!authToken) {
-//     return res.status(401).json({
-//       msg: "Unauthoized",
-//     });
-//   }
-//   try {
-//     const { payload } = await jose.jwtVerify(authToken, JWKS);
-//     console.log("ok");
-//     next();
-//   } catch (err) {
-//     console.log(authToken);
-//     return res.status(403).json({
-//       msg: "forbidden",
-//     });
-//   }
-// };
+const verifyToken = async (req, res, next) => {
+  
+  
+  
+  const authToken =await req.headers.authorization.split(" ")[1];
+  console.log(authToken)
+  if (!authToken) {
+    return res.status(401).json({
+      msg: "Unauthoized",
+    });
+  }
+  try {
+    const { payload } = await jose.jwtVerify(authToken, JWKS);
+    console.log("ok");
+    next();
+  } catch (err) {
+    console.log(authToken);
+    return res.status(403).json({
+      msg: "forbidden",
+    });
+  }
+};
 
 async function run() {
   try{
@@ -62,6 +66,45 @@ async function run() {
       res.send(data)
     })
 
+    //get admin overview 
+    app.get('/api/admin/overview',verifyToken, async (req, res) => {
+    try {
+    const [
+      totalTickets,
+      pendingTickets,
+      activeTickets,
+      rejectedTickets,
+      totalAccount,
+      totalUser,
+      totalVendor,
+      totalAdmin,
+    ] = await Promise.all([
+      ticket.collection('tickets').countDocuments(),
+      ticket.collection('tickets').countDocuments({ verificationStatus: 'pending' }),
+      ticket.collection('tickets').countDocuments({ verificationStatus: 'active' }),
+      ticket.collection('tickets').countDocuments({ verificationStatus: 'rejected' }),
+      account.collection('user').countDocuments( {role: { $ne: 'admin' }}),
+      account.collection('user').countDocuments({ role: 'user',   isBlock: false }),
+      account.collection('user').countDocuments({ role: 'vendor', isBlock: false }),
+      account.collection('user').countDocuments({ isBlock: true }),
+    ]);
+
+    res.status(200).json({
+      totalTickets,
+      pendingTickets,
+      activeTickets,
+      rejectedTickets,
+      totalAccount,
+      totalUser,
+      totalVendor,
+      totalAdmin,
+    });
+  } catch (error) {
+    console.error('Admin overview error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
     //get my ticket(vendor)
 
     app.get('/api/myticket/:email',async(req,res)=> {
@@ -72,6 +115,39 @@ async function run() {
       const data = await ticket.collection('tickets').find(filter).toArray();
       res.send(data)
     })
+
+    // GET /api/getuser/:email
+app.get('/api/getuser/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const user = await account.collection('user').findOne({ email });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.status(200).json(user);
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// PATCH /api/admin/getuser
+app.patch('/api/admin/getuser', async (req, res) => {
+  
+  try {
+    const { email, name, img } = req.body;
+    
+    const result = await account.collection('user').updateOne(
+      { email },
+      { $set: { name, img, updatedAt: new Date().toISOString() } },
+      
+    );
+    console.log(email)
+    if (!result) return res.status(404).json({ message: 'User not found' });
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Update user error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
 
     // post user new account 
     app.post('/api/account',async(req,res) => {
@@ -111,6 +187,8 @@ async function run() {
 
     })
 
+    //patch updatad ticket data from vendor
+
 
     //patch admin reject or approve 
 
@@ -143,7 +221,15 @@ async function run() {
             isBlock:true
           }
         }
+        
       )
+      const user = await account.collection('user').findOne({
+          _id:new ObjectId(id)
+        })
+      
+      await ticket.collection('tickets').deleteMany({
+        vendorEmail:user.email
+      })
 
       const makeUserAction2 = await authAccount.collection('user').updateOne(
         {_id:new ObjectId(id)},

@@ -1,7 +1,6 @@
 {
   "name": "ticketlagbe-backend",
   "module": "index.js",
-  
   "private": true,
   "devDependencies": {
     "@types/bun": "latest"
@@ -18,6 +17,8 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
+    "jose-cjs": "^6.2.3",
+    "jose-node-cjs-runtime": "^5.10.0",
     "jsonwebtoken": "^9.0.3",
     "mongodb": "^7.3.0",
     "multer": "^2.2.0",
