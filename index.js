@@ -27,12 +27,12 @@ const verifyToken = async (req, res, next) => {
   if (!authHeader) {
     return res.status(401).json({ msg: "Unauthorized" });
   }
-  
+
   const authToken = authHeader.split(" ")[1];
   if (!authToken) {
     return res.status(401).json({ msg: "Unauthorized" });
   }
-  
+
   try {
     const { payload } = await jose.jwtVerify(authToken, JWKS);
     console.log("ok");
@@ -45,25 +45,49 @@ const verifyToken = async (req, res, next) => {
 
 async function run() {
   try {
-    const ticket = await client.db('Tickets');
-    const authAccount = await client.db('TL_AUTH'); // Replaced account db with authAccount
+    const ticket = await client.db("Tickets");
+    const authAccount = await client.db("TL_AUTH"); // Replaced account db with authAccount
 
-    // get admin user for manage 
-    app.get('/api/admin/user', verifyToken, async (req, res) => {
-      const data = await authAccount.collection('user').find().toArray();
+    // get admin user for manage
+    app.get("/api/admin/user", verifyToken, async (req, res) => {
+      const data = await authAccount.collection("user").find().toArray();
       res.send(data);
     });
 
-    // get all ticket 
-    app.get('/api/allticket/ad', async (req, res) => {
-      const data = await ticket.collection('tickets').find({
-        verificationStatus:'approved'
-      }).toArray();
+    app.get('/api/allticketpag',async(req,res) =>{
+      const page = parseInt(req.query.page) || 1
+      console.log(page)
+      const skip = (page-1)*6
+      const data =await ticket.collection('tickets')
+                  .find({verificationStatus:'approved'})
+                  .skip(skip)
+                  .limit(6)
+                  .toArray()
+      const totalTickets = await ticket
+    .collection('tickets')
+    .countDocuments({verificationStatus:'approved'});
+      res.send({
+        tickets:data,
+        totalTickets,
+        currentPage:page,
+        totalPage:Math.ceil(totalTickets/6)
+      }
+      )
+    })
+
+    // get all ticket
+    app.get("/api/allticket/ad", async (req, res) => {
+      const data = await ticket
+        .collection("tickets")
+        .find({
+          verificationStatus: "approved",
+        })
+        .toArray();
       res.send(data);
     });
 
-    // get admin overview 
-    app.get('/api/admin/overview', verifyToken, async (req, res) => {
+    // get admin overview
+    app.get("/api/admin/overview", verifyToken, async (req, res) => {
       try {
         const [
           totalTickets,
@@ -75,14 +99,26 @@ async function run() {
           totalVendor,
           totalAdmin,
         ] = await Promise.all([
-          ticket.collection('tickets').countDocuments(),
-          ticket.collection('tickets').countDocuments({ verificationStatus: 'pending' }),
-          ticket.collection('tickets').countDocuments({ verificationStatus: 'approved' }),
-          ticket.collection('tickets').countDocuments({ verificationStatus: 'rejected' }),
-          authAccount.collection('user').countDocuments({ role: { $ne: 'admin' } }),
-          authAccount.collection('user').countDocuments({ role: 'user', isBlock: false }),
-          authAccount.collection('user').countDocuments({ role: 'vendor', isBlock: false }),
-          authAccount.collection('user').countDocuments({ isBlock: true }),
+          ticket.collection("tickets").countDocuments(),
+          ticket
+            .collection("tickets")
+            .countDocuments({ verificationStatus: "pending" }),
+          ticket
+            .collection("tickets")
+            .countDocuments({ verificationStatus: "approved" }),
+          ticket
+            .collection("tickets")
+            .countDocuments({ verificationStatus: "rejected" }),
+          authAccount
+            .collection("user")
+            .countDocuments({ role: { $ne: "admin" } }),
+          authAccount
+            .collection("user")
+            .countDocuments({ role: "user", isBlock: false }),
+          authAccount
+            .collection("user")
+            .countDocuments({ role: "vendor", isBlock: false }),
+          authAccount.collection("user").countDocuments({ isBlock: true }),
         ]);
 
         res.status(200).json({
@@ -96,193 +132,215 @@ async function run() {
           totalAdmin,
         });
       } catch (error) {
-        console.error('Admin overview error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        console.error("Admin overview error:", error);
+        res.status(500).json({ message: "Internal server error" });
       }
     });
 
-    app.get('/api/tickets/:id',async(req,res) => {
+    app.get("/api/tickets/:id", async (req, res) => {
       const id = req.params.id;
-      console.log(id)
-      const ticketInfo = await ticket.collection('tickets').find({
-        verificationStatus:'approved',
-        _id:new ObjectId(id)
-      }).toArray()
-      console.log(ticketInfo)
+      console.log(id);
+      const ticketInfo = await ticket
+        .collection("tickets")
+        .find({
+          verificationStatus: "approved",
+          _id: new ObjectId(id),
+        })
+        .toArray();
+      console.log(ticketInfo);
       res.send(ticketInfo);
-    })
+    });
 
     // get ad ticket
 
-    app.get('/api/adticket',async(req,res) => {
-      const data = await ticket.collection('tickets').find({
-        isAd:true
-      }).toArray();
-      res.send(data)
-    })
-
-    // get my ticket(vendor)
-    app.get('/api/myticket/:email', async (req, res) => {
-      const email = req.params.email;
-      const filter = { vendorEmail: email };
-      const data = await ticket.collection('tickets').find(filter).toArray();
+    app.get("/api/adticket", async (req, res) => {
+      const data = await ticket
+        .collection("tickets")
+        .find({
+          isAd: true,
+        })
+        .toArray();
       res.send(data);
     });
 
-    // get approved ticket for ad 
+    // get my ticket(vendor)
+    app.get("/api/myticket/:email", async (req, res) => {
+      const email = req.params.email;
+      const filter = { vendorEmail: email };
+      const data = await ticket.collection("tickets").find(filter).toArray();
+      res.send(data);
+    });
 
-    app.get('/api/allticket',async (req,res) => {
+    // get approved ticket for ad
 
-      const data = await ticket.collection('tickets').find().toArray()
-     console.log(data)
-      res.send(data)
-    })
+    app.get("/api/allticket", async (req, res) => {
+      const data = await ticket.collection("tickets").find().toArray();
+      console.log(data);
+      res.send(data);
+    });
 
     // GET /api/getuser/:email
-    app.get('/api/getuser/:email', verifyToken, async (req, res) => {
+    app.get("/api/getuser/:email", verifyToken, async (req, res) => {
       try {
         const { email } = req.params;
-        const user = await authAccount.collection('user').findOne({ email });
-        if (!user) return res.status(404).json({ message: 'User not found' });
+        const user = await authAccount.collection("user").findOne({ email });
+        if (!user) return res.status(404).json({ message: "User not found" });
         res.status(200).json(user);
       } catch (error) {
-        console.error('Get user error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        console.error("Get user error:", error);
+        res.status(500).json({ message: "Internal server error" });
       }
     });
-    //patch ticket toggling 
+    //patch ticket toggling
 
-    app.patch('/api/ticket/ad',async(req,res) => {
-       const msg =await ticket.collection('tickets').updateOne(
-        {_id:new ObjectId(req.body.id)},
-        {$set:{
-          isAd:req.body.isAd
-        }}
-       )
-       if(msg.modifiedCount === 1){
+    app.patch("/api/ticket/ad", async (req, res) => {
+      const msg = await ticket.collection("tickets").updateOne(
+        { _id: new ObjectId(req.body.id) },
+        {
+          $set: {
+            isAd: req.body.isAd,
+          },
+        },
+      );
+      if (msg.modifiedCount === 1) {
         res.send({
-          success:true,
-        })
-       }
-    })
+          success: true,
+        });
+      }
+    });
 
-    // post ticket booking 
+    // post ticket booking
 
-    app.post('/api/bookings',verifyToken,async (req,res) => {
-      console.log(req.body)
+    app.post("/api/bookings", verifyToken, async (req, res) => {
+      console.log(req.body);
       const quantity = req.body.quantity;
 
-      const msg = await ticket.collection('booking').insertOne(req.body)
-      const operateSeats = await ticket.collection('tickets').updateOne(
-        { _id:new ObjectId(req.body.ticketId),
-          quantity: { $gt: 0 } 
+      const msg = await ticket.collection("booking").insertOne(req.body);
+      const operateSeats = await ticket.collection("tickets").updateOne(
+        { _id: new ObjectId(req.body.ticketId), quantity: { $gt: 0 } },
+        {
+          $inc: {
+            quantity: -quantity,
+            totalSold: quantity,
+          },
         },
-        {
-          $inc:{
-            quantity:-quantity,
-            totalSold:quantity,
-          }
-        }
-    )
-      console.log(operateSeats)
-      res.send(msg)
-    })
-
-    app.get('/api/bookings/:email',verifyToken,async (req,res) => {
-      const result = await ticket.collection('booking').find(
-        {
-          email:req.params.email
-        }
-      ).toArray()
-      res.send(result)
-    })
-
-    app.patch('/api/reqbookings/:id',verifyToken,async(req,res) => {
-      console.log(req.body)
-      
-      
-      const msg = await ticket.collection('booking').updateOne(
-        {_id:new ObjectId(req.body._id)},
-        {
-          $set:{
-            status:req.body.status
-          }
-        }
-      )
-      console.log(msg)
-     res.send(msg)
-     
-      
-    })
-
-    app.get('/api/bookings/vendor/:email',verifyToken,async(req,res) => {
-      const data = await ticket.collection('booking').find({
-        vendorEmail:req.params.email,
-      }).toArray();
-      console.log(data)
-      res.send(data)
-    })
-
-    // PATCH /api/admin/getuser
-    app.patch('/api/admin/getuser',verifyToken, async (req, res) => {
-      try {
-        const { email, name, img } = req.body;
-        
-        const result = await authAccount.collection('user').updateOne(
-          { email:email },
-          { $set: { name, img, updatedAt: new Date().toISOString() } }
-        );
-        console.log(email);
-        if (!result) return res.status(404).json({ message: 'User not found' });
-        res.status(200).json(result);
-      } catch (error) {
-        console.error('Update user error:', error);
-        res.status(500).json({ message: 'Internal server error' });
-      }
-    });
-
-    // post new tickets
-    app.post('/api/ticket',verifyToken, async (req, res) => {
-      const msg = await ticket.collection('tickets').insertOne(req.body);
-      res.send(msg?.acknowledged);
-    });
-
-    // PATCH /api/ticket  →  Update a ticket
-    app.patch('/api/ticket', async (req, res) => {
-      const updatedData = req.body;
-      const result = await ticket.collection('tickets').updateOne(
-        { _id: new ObjectId(req.body.id) },
-        { $set: updatedData }
       );
-      res.send({
-        ...result ,success:result.modifiedCount === 1,
-      });
+      console.log(operateSeats);
+      res.send(msg);
     });
 
-    // DELETE /api/ticket/:id  →  Delete a ticket
-    app.delete('/api/ticket/:id', async (req, res) => {
-      const id = req.params.id;
-      const result = await ticket.collection('tickets').deleteOne(
-        { _id: new ObjectId(id) }
-      );
+    app.get("/api/bookings/:email", verifyToken, async (req, res) => {
+      const result = await ticket
+        .collection("booking")
+        .find({
+          email: req.params.email,
+        })
+        .toArray();
       res.send(result);
     });
 
-    // patch admin reject or approve 
-    app.patch('/api/admin/tickets', verifyToken, async (req, res) => {
-      const status = req.body.verificationStatus;
-      const id = req.body.id;
-      console.log(req.body)
-      const msg = await ticket.collection('tickets').updateOne(
-        { _id: new ObjectId(id) },
-        { $set: { verificationStatus: status } }
+    app.patch("/api/reqbookings/:id", verifyToken, async (req, res) => {
+      console.log(req.body);
+
+      const msg = await ticket.collection("booking").updateOne(
+        { _id: new ObjectId(req.body._id) },
+        {
+          $set: {
+            status: req.body.status,
+          },
+        },
       );
       console.log(msg);
       res.send(msg);
     });
 
-    // patch user role by Admin 
-    app.patch('/api/admin/users',verifyToken, async (req, res) => {
+    app.get("/api/bookings/vendor/:email", verifyToken, async (req, res) => {
+      const data = await ticket
+        .collection("booking")
+        .find({
+          vendorEmail: req.params.email,
+        })
+        .toArray();
+      console.log(data);
+      res.send(data);
+    });
+
+    // PATCH /api/admin/getuser
+    app.patch("/api/admin/getuser", verifyToken, async (req, res) => {
+      try {
+        const { email, name, img } = req.body;
+
+        const result = await authAccount
+          .collection("user")
+          .updateOne(
+            { email: email },
+            { $set: { name, img, updatedAt: new Date().toISOString() } },
+          );
+        console.log(email);
+        if (!result) return res.status(404).json({ message: "User not found" });
+        res.status(200).json(result);
+      } catch (error) {
+        console.error("Update user error:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
+    // post new tickets
+    app.post("/api/ticket", verifyToken, async (req, res) => {
+      const msg = await ticket.collection("tickets").insertOne(req.body);
+      res.send(msg?.acknowledged);
+      console.log(msg);
+    });
+
+    // PATCH /api/ticket  →  Update a ticket
+    app.patch("/api/ticket", verifyToken, async (req, res) => {
+      const updatedData = req.body;
+      const result = await ticket
+        .collection("tickets")
+        .updateOne({ _id: new ObjectId(req.body.id) }, { $set: updatedData });
+      res.send({
+        ...result,
+        success: result.modifiedCount === 1,
+      });
+    });
+
+    // DELETE /api/ticket/:id  →  Delete a ticket
+    app.delete("/api/ticket/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const result = await ticket
+        .collection("tickets")
+        .deleteOne({ _id: new ObjectId(id) });
+      res.send(result);
+    });
+
+    // patch admin reject or approve
+    app.patch("/api/admin/tickets", verifyToken, async (req, res) => {
+      const status = req.body.verificationStatus;
+      const id = req.body.id;
+      console.log(req.body);
+      const msg = await ticket
+        .collection("tickets")
+        .updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { verificationStatus: status } },
+        );
+      console.log(msg);
+      res.send(msg);
+    });
+
+    app.get("/api/allticket/latest", async (req, res) => {
+      const latestApproved = await ticket
+        .collection("tickets")
+        .find({ verificationStatus: "approved" })
+        .sort({ createdAt: -1 })
+        .limit(6)
+        .toArray();
+
+      res.send(latestApproved)
+    });
+
+    // patch user role by Admin
+    app.patch("/api/admin/users", verifyToken, async (req, res) => {
       const id = req.body?.id;
       const role = req.body?.role;
       const isFraud = req.body?.isFraud;
@@ -291,42 +349,36 @@ async function run() {
 
       if (isFraud) {
         // Updated this action step to find and modify directly on authAccount collection
-        const makeUserAction = await authAccount.collection('user').updateOne(
-          { _id: new ObjectId(id) },
-          { $set: { isBlock: true } }
-        );
-        
-        const user = await authAccount.collection('user').findOne({
-          _id: new ObjectId(id)
+        const makeUserAction = await authAccount
+          .collection("user")
+          .updateOne({ _id: new ObjectId(id) }, { $set: { isBlock: true } });
+
+        const user = await authAccount.collection("user").findOne({
+          _id: new ObjectId(id),
         });
-        
+
         if (user?.email) {
-          await ticket.collection('tickets').deleteMany({
-            vendorEmail: user.email
+          await ticket.collection("tickets").deleteMany({
+            vendorEmail: user.email,
           });
         }
 
-        const makeUserAction2 = await authAccount.collection('user').updateOne(
-          { email: email },
-          { $set: { isFraud: true } }
-        );
+        const makeUserAction2 = await authAccount
+          .collection("user")
+          .updateOne({ email: email }, { $set: { isFraud: true } });
         res.send(makeUserAction);
-
       } else if (role) {
-        const makeUserAction = await authAccount.collection('user').updateOne(
-          { _id: new ObjectId(id) },
-          { $set: { role: role } }
-        );
+        const makeUserAction = await authAccount
+          .collection("user")
+          .updateOne({ _id: new ObjectId(id) }, { $set: { role: role } });
 
-        const makeUserAction2 = await authAccount.collection('user').updateOne(
-          { email: email },
-          { $set: { role: role } }
-        );
+        const makeUserAction2 = await authAccount
+          .collection("user")
+          .updateOne({ email: email }, { $set: { role: role } });
         console.log(makeUserAction2, id, role, email);
         res.send(makeUserAction);
       }
     });
-
   } catch (err) {
     console.error("Initialization error:", err);
   }
@@ -334,11 +386,11 @@ async function run() {
 run();
 
 app.get("/", (req, res) => {
-  res.send([{ msg: 'your api is working' }]);
+  res.send([{ msg: "your api is working" }]);
 });
 
-app.listen(5000, () => {
-  console.log('running');
+app.listen(9000, () => {
+  console.log(`Server successfully running on port 5000`);
 });
 
 module.exports = app;
