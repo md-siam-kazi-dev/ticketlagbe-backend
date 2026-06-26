@@ -1,3 +1,5 @@
+
+
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
@@ -54,26 +56,59 @@ async function run() {
       res.send(data);
     });
 
-    app.get('/api/allticketpag',async(req,res) =>{
-      const page = parseInt(req.query.page) || 1
-      console.log(page)
-      const skip = (page-1)*6
-      const data =await ticket.collection('tickets')
-                  .find({verificationStatus:'approved'})
-                  .skip(skip)
-                  .limit(6)
-                  .toArray()
-      const totalTickets = await ticket
-    .collection('tickets')
-    .countDocuments({verificationStatus:'approved'});
+    app.get("/api/allticketpag", async (req, res) => {
+      const page = parseInt(req.query.page) || 1;
+      console.log(req.query);
+      const skip = (page - 1) * 6;
+      const sortMap = {
+        asc: { price: 1 },
+        desc: { price: -1 },
+        none: {},
+      };
+      const data = await ticket
+        .collection("tickets")
+        .find({
+          verificationStatus: "approved",
+          to: {
+            $regex: req.query.to,
+            $options: "i",
+          },
+          from: {
+            $regex: req.query.from,
+            $options: "i",
+          },
+          transportType: {
+            $regex: req.query.type,
+            $options: "i",
+          },
+        })
+        .sort(sortMap[req.query.sort])
+        .skip(skip)
+        .limit(6)
+        .toArray();
+      const totalTicket = await ticket.collection("tickets").countDocuments({
+        verificationStatus: "approved",
+        to: {
+          $regex: req.query.to,
+          $options: "i",
+        },
+        from: {
+          $regex: req.query.from,
+          $options: "i",
+        },
+        transportType: {
+          $regex: req.query.type,
+          $options: "i",
+        },
+      });
+
       res.send({
-        tickets:data,
-        totalTickets,
-        currentPage:page,
-        totalPage:Math.ceil(totalTickets/6)
-      }
-      )
-    })
+        tickets: data,
+        totalTicket,
+        currentPage: page,
+        totalPage: Math.ceil(totalTicket / 6),
+      });
+    });
 
     // get all ticket
     app.get("/api/allticket/ad", async (req, res) => {
@@ -239,6 +274,135 @@ async function run() {
       res.send(result);
     });
 
+    app.patch("/api/paidbooking", verifyToken, async (req, res) => {
+      const isPaidTicket = await ticket.collection("booking").findOne({
+        _id: new ObjectId(req.body.bookingId),
+      });
+      console.log(isPaidTicket);
+
+      if (!isPaidTicket.isPaid) {
+        const msg = await ticket.collection("booking").updateOne(
+          { _id: new ObjectId(req.body.bookingId) },
+          {
+            $set: {
+              isPaid: true,
+              transactionId: req.body.transactionId,
+              paymentDate: new Date(),
+            },
+          },
+        );
+        console.log(msg);
+        res.send(msg);
+      } else {
+        console.log("already paid");
+        res.send({
+          msg: "already paid",
+        });
+      }
+    });
+
+    app.get("/api/user/stats/:email", verifyToken, async (req, res) => {
+      const email = req.params.email
+      const [
+        totalBookings,
+        pendingReview,
+        approvedPaid,
+        rejectedCount,
+        totalSpent,
+        pendingPay,
+        totalSeats,
+      ] =await Promise.all([
+        ticket.collection("booking").countDocuments({
+          email: email,
+        }),
+        ticket.collection("booking").countDocuments({
+          email: email,
+          status: "pending",
+        }),
+        ticket.collection("booking").countDocuments({
+          email: email,
+          status: "accepted",
+        }),
+        ticket.collection("booking").countDocuments({
+          email: email,
+          status: "rejected",
+        }),
+        ticket.collection("booking").aggregate([
+          {
+            $match: {
+              email: email,
+              isPaid: true,
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              totalSpent: {
+                $sum: {
+                  $multiply: ["$price", "$quantity"],
+                },
+              },
+            },
+          },
+        ]).toArray(),
+        ticket.collection("booking").aggregate([
+          {
+            $match: {
+              email: email,
+              isPaid: false,
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              pendingPay: {
+                $sum: {
+                  $multiply: ["$price", "$quantity"],
+                },
+              },
+            },
+          },
+        ]).toArray(),
+        ticket.collection("booking").aggregate([
+          {
+            $match: {
+              email: email,
+              isPaid: true,
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              totalSeats: {
+                $sum: '$quantity'
+              },
+            },
+          },
+        ]).toArray(),
+      ])
+
+      res.send({
+        totalBookings,
+        pendingReview,
+        approvedPaid,
+        rejectedCount,
+        totalSpent:totalSpent[0]?.totalSpent,
+        pendingPay:pendingPay[0]?.pendingPay,
+        totalSeats: totalSeats[0].totalSeats,
+      });
+    });
+
+    app.get("/api/trx/:email", verifyToken, async (req, res) => {
+      const msg = await ticket
+        .collection("booking")
+        .find({
+          email: req.params.email,
+          isPaid: true,
+        })
+        .toArray();
+      res.send(msg);
+    });
+
     app.patch("/api/reqbookings/:id", verifyToken, async (req, res) => {
       console.log(req.body);
 
@@ -336,7 +500,7 @@ async function run() {
         .limit(6)
         .toArray();
 
-      res.send(latestApproved)
+      res.send(latestApproved);
     });
 
     // patch user role by Admin

@@ -1,6 +1,7 @@
 {
   "name": "ticketlagbe-backend",
   "module": "index.js",
+ 
   "private": true,
   "devDependencies": {
     "@types/bun": "latest"
