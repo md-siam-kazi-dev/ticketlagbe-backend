@@ -14,7 +14,7 @@ app.use(express.json());
 
 const uri = process.env.MONOGODB_URI;
 const JWKS = jose.createRemoteJWKSet(
-  new URL("http://localhost:3000/api/auth/jwks"),
+  new URL("https://ticketbookplatform.vercel.app/api/auth/jwks"),
 );
 const client = new MongoClient(uri, {
   serverApi: {
@@ -300,6 +300,14 @@ async function run() {
         });
       }
     });
+
+    app.get('/api/vendor/rev/:email',verifyToken,async(req,res) =>{
+       const data = await ticket.collection('booking').find({
+         vendorEmail:req.params.email,
+         isPaid:true,
+       }).toArray();
+       res.send(data)
+    })
 
     app.get("/api/user/stats/:email", verifyToken, async (req, res) => {
       const email = req.params.email
