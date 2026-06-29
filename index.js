@@ -150,6 +150,86 @@ async function run() {
       }
     });
 
+    // get vendor overview 
+
+    app.get('/api/vendoroverview/:email',verifyToken,async(req,res) => {
+    const email = req.params.email;
+  //       totalTickets: 34,
+  // pendingTickets: 5,
+  // approvedTickets: 24,
+  // rejectedTickets: 5,
+  // requestedBookings: 12,
+  // totalSold: 186,
+  // totalRevenue: 223200,
+
+   const [totalTickets,
+      pendingTickets,
+      approvedTickets,
+      rejectedTickets,
+      requestedBookings,
+      totalSold,
+      totalRevenue
+     ] = await Promise.all([
+      ticket.collection('tickets').countDocuments({
+        vendorEmail:email,
+      }),
+      ticket.collection('tickets').countDocuments(
+        {vendorEmail:email,
+          verificationStatus:'pending'
+        
+      }),
+      ticket.collection('tickets').countDocuments({
+        vendorEmail:email,
+        verificationStatus:'approved'
+      }),
+      ticket.collection('tickets').countDocuments({
+        verificationStatus:'rejected'
+      }),ticket.collection('booking').countDocuments({
+        vendorEmail:email,
+        isPaid: false,
+      }),
+      ticket.collection('booking').aggregate([{
+        $match:{
+          vendorEmail:email,
+          isPaid:true,
+        }
+      },{
+      $group:{
+        _id:null,
+
+        totalSold:{
+          $sum:'$quantity',
+        }
+      }}
+      ]).toArray(),
+      ticket.collection('booking').aggregate([
+        {$match:{
+          vendorEmail:email,
+          isPaid:true,
+        }},
+        {
+          $group:{
+            _id:null,
+            rv:{
+              $sum:'$totalPrice'
+            }
+          }
+        }
+      ]).toArray()
+
+     ])
+
+     res.send({
+      pendingTickets,
+      approvedTickets,
+      rejectedTickets,
+      requestedBookings,
+      totalSold:totalSold[0]?.totalSold,
+      totalRevenue:totalRevenue[0].rv,
+     })
+    })
+    
+
     // GET: Fetch detailed info for a single approved ticket using its hex ID string
     app.get("/api/tickets/:id", async (req, res) => {
       const id = req.params.id;
