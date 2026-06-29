@@ -219,7 +219,7 @@ async function run() {
 
      ])
 
-     res.send({
+     res.send({totalTickets,
       pendingTickets,
       approvedTickets,
       rejectedTickets,
